@@ -1,0 +1,50 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    image: video-summarizer-app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  api:
+    image: video-summarizer-app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - app
+
+  worker:
+    image: video-summarizer-app
+    command: rq worker ingestion --worker-class rq.worker.SimpleWorker
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./cookies.txt:/app/cookies.txt
+
+  streamlit:
+    image: video-summarizer-app
+    command: streamlit run frontend/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      - api
